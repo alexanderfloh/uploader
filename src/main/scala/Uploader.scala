@@ -17,30 +17,33 @@ class DmpsterUpload extends org.apache.tools.ant.Task {
   private var baseDir: Option[String] = None
   private var serverUrl: Option[String] = None
   private var tags: Option[String] = None
+  private var failOnError: Boolean = true
 
   def setBaseDir(baseDir: String): Unit = this.baseDir = Some(baseDir)
   def setServerUrl(serverUrl: String): Unit = this.serverUrl = Some(serverUrl)
   def setTags(tags: String): Unit = this.tags = Some(tags)
+  def setFailOnError(fail: Boolean): Unit = this.failOnError = fail
 
   override def execute(): Unit = {
     val dir = baseDir getOrElse (throw new BuildException("baseDir can not be empty"))
     val url = serverUrl getOrElse (throw new BuildException("serverUrl can not be empty"))
 
     val directory = new File(dir)
-    if (!directory.isDirectory()) throw new BuildException("'" + dir + "' is not a directory")
+    if (directory.isDirectory()) {
+      log("uploading files from directory " + dir + " to " + url)
 
-    log("uploading files from directory " + dir + " to " + url)
+      import DmpsterUpload.fileFilter
+      val dumpFiles = directory.listFiles((file: File) => file.getName.endsWith("dmp"))
 
-    import DmpsterUpload.fileFilter
-    val dumpFiles = directory.listFiles((file: File) => file.getName.endsWith("dmp"))
-
-    dumpFiles.map(file => Future { uploadFile(file, url, tags) })
-      .foreach(Await.ready(_, Duration.Inf))
-
+      dumpFiles.map(file => Future { uploadFile(file, url, tags) })
+        .foreach(Await.ready(_, Duration.Inf))
+        
+    } else {
+      if (failOnError) throw new BuildException("'" + dir + "' is not a directory")
+    }
   }
 
   def uploadFile(file: File, url: String, tags: Option[String]) = {
-
     log("uploading file " + file.getName())
     val client: HttpClient = new DefaultHttpClient()
     try {
